@@ -1,0 +1,14 @@
+services:
+  dev-db:
+    image: postgres:latest
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: res_dev
+      POSTGRES_PASSWORD: 123
+      POSTGRES_DB: restaurant_prod_db
+    networks:
+      - dev-net
+
+networks:
+  dev-net:

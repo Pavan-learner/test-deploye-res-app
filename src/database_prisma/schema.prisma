@@ -1,0 +1,626 @@
+  // This is your Prisma schema file,
+  // learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+  // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+  // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+  generator client {
+    provider = "prisma-client-js"
+    output   = "../generated/prisma"
+  }
+
+  datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+  }
+
+  enum Role {
+    ADMIN
+    EMPLOYEE
+  }
+
+  model User {
+    id       String  @id @default(cuid())
+    name     String?
+    username String? @unique
+    email    String? @unique
+    password String?
+    role     Role
+
+    accessToken  String?
+    refreshToken String?
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime @updatedAt
+
+    // Role-based relations
+    ownedRestaurant   Restaurant? @relation("Owner")
+    worksAtRestaurant Restaurant? @relation("Staff", fields: [restaurantId], references: [id])
+
+    // this will be used to identify the restaurant the user works at
+    restaurantId String?
+  }
+
+  // this is services that are offered by the restaurant and some of them are not offering this service but some of them are offering 
+  // so here we should implement a way show the services that are offered by the restaurant
+  // and the services can be easily updated by the restaurant owner
+  model ServiceType {
+    id   String @id @default(cuid())
+    name String @unique
+
+    // this will be used to identify the service type
+    restaurantServices RestaurantService[]
+  }
+
+  model RestaurantService {
+    id String @id @default(cuid())
+
+    // this will be used to identify the restaurant
+    restaurantId String
+    restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+    // this will be used to identify the service type
+    serviceTypeId String
+    serviceType   ServiceType @relation(fields: [serviceTypeId], references: [id])
+
+    // here we will store the service status i.e i mean it's offered by restaurant or not
+    // so if the restaurant is offering the service then the status will be true
+    // and if the restaurant is not offering the service then the status will be false
+    status Boolean @default(true)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
+
+  model Restaurant {
+    id String @id @default(cuid())
+
+    // restaurant info
+    name           String
+    bussinessPhone String?
+    bussinessEmail String?
+    address        String?
+    city           String?
+    zipCode        String?
+
+    /**
+    * Store hours and day in JSON format
+    * {
+    * "Monday": {
+    * "open": "09:00",
+    * "close": "17:00"
+    * },
+    * "Tuesday": {
+    * "open": "09:00",
+    * "close": "17:00"
+    * },
+    */
+    businessHours Json? @default("{}")
+
+    // relations
+    // this will be used to identify the owner of the restaurant
+    userId String? @unique
+    owner  User?   @relation("Owner", fields: [userId], references: [id])
+    // this will be used to identify the staffs of the restaurant
+    staffs User[]  @relation("Staff")
+
+    // this will be used to identify the restaurant services
+    restaurantServices RestaurantService[]
+
+    // this will be used to identify the restaurant taxes
+    taxes Tax[]
+
+    // this will be used to identify the restaurant categories
+    categories Category[]
+
+    // Each restaurant can have multiple menu items
+    menuItems Menu[]
+
+    // Sections i.e floor , balcony for the restaurant 
+    sections Section[]
+
+    // tables i.e like table 1, table 2 for the restaurant
+    tables Table[]
+
+    // addon groups i.e like extra cheese, extra sauce for the restaurant
+    addonGroups AddonGroup[]
+
+    // this will be used to indentify the discounts for the restaurant
+    discounts Discount[]
+
+    // the restaurant can have multiple charges i.e like service charge, delivery charge etc
+    charges Charge[]
+
+    // the restaurant will have multiple orders 
+    orders Order[]
+
+    // menu Settings these are like settings for the menu (product) i.e like show image or not, show price or not etc
+    menuSettings MenuSettings?
+
+    // timestamps
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
+
+  // Category model
+
+  model Category {
+    id String @id @default(uuid())
+
+    name        String
+    description String?
+    image       String?
+
+    sortOrder Int
+
+    // this will be used to enable and disable the category for restaurant
+    isActive Boolean
+
+    // Relations
+    // Each category will be associated with a restaurant
+    restaurantId String
+    restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+    // Each category can have multiple menu items
+    menuItems Menu[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
+
+  // Menu model like product mode that is referenced with category
+  model Menu {
+    id String @id @default(uuid())
+
+    name         String
+    description  String?
+    image        String?
+    basePrice    Int
+    hasVariants  Boolean? @default(false)
+    taxInclusive Boolean? @default(false)
+    isAvailable  Boolean? @default(true)
+    setOrder     Int?     @default(0)
+
+    // Relations
+    // Each menu item will be associated with a category
+    categoryId String
+    category   Category @relation(fields: [categoryId], references: [id])
+
+    // Each menu is associated with a restaurant 
+    restaurantId String
+    restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+    // Each menu item can have multiple variants
+    menuVariants     MenuVariant[]
+    addonGroupsItems AddonGroupItem[]
+
+    // each menu will be associated with a order details
+    orderDetails OrderDetail[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
+
+  // this is the variant model that is referenced with menu
+  model MenuVariant {
+    id String @id @default(uuid())
+
+    name        String
+    description String?
+    image       String?
+    price       Int
+    isAvailable Boolean @default(true)
+
+    // Relations
+    // Each menu variant will be associated with a menu item
+    menuId String
+    menu   Menu   @relation(fields: [menuId], references: [id])
+
+    // each menu variant will be associated with a order details
+    orderDetails OrderDetail[]
+    createdAt    DateTime      @default(now())
+    updatedAt    DateTime      @updatedAt
+  }
+
+  // addons group model that is referenced with menu these are like extras that are linked with menu(product) i.e like extra cheese, extra sauce etc
+  model AddonGroup {
+    id            String   @id @default(uuid())
+    name          String
+    description   String?
+    selectionType String?  @default("single") // single or multiple
+    minSelection  Int?     @default(0) // minimum selection
+    maxSelection  Int? // maximum selection
+    isRequired    Boolean? @default(false) // is required or not
+    sortOrder     Int?     @default(0) // sort order
+
+    // Relations
+    addonGroupItems AddonGroupItem[] // each addon group can have multiple addon group items
+
+    restaurantId String?
+    restaurant   Restaurant? @relation(fields: [restaurantId], references: [id]) // each addon group will be associated with a restaurant
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
+
+  model AddonGroupItem {
+    id String @id @default(uuid())
+
+    name String
+
+    price Int?
+
+    isAvailable Boolean? @default(true) // is available or not
+
+    sortOrder Int? @default(0) // sort order
+
+    // Relations
+    addonGroupId String
+    addonGroup   AddonGroup @relation(fields: [addonGroupId], references: [id]) // each addon group item will be associated with a addon group
+
+    menuId String? // this will be used to identify the menu item
+    menu   Menu?   @relation(fields: [menuId], references: [id]) // each addon group item will be associated with a menu item
+
+    // each addon group item will belong to selecedAddon array becauase it will be used to track the selected addons during order 
+    selectedaddon SelectedAddon[]
+
+    createdAt DateTime? @default(now())
+    updatedAt DateTime? @updatedAt
+  }
+
+  // this is the table modle that is used to store the restaurant table info
+  enum TableStatus {
+    AVAILABLE
+    OCCUPIED
+    RESERVED
+  }
+
+  model Table {
+    id String @id @default(cuid())
+
+    // this will be used to identify the table capacity
+    tableNumber Int?
+
+    // location i.e cordinates of the table
+    location Json?
+
+    // delivery boy or servent name 
+    captain String? // * Future feature
+
+    // this will be used to identify the table status
+    tableStatus TableStatus @default(AVAILABLE)
+
+    // this will be used to enable and disable the table for restaurant
+    status Boolean @default(true)
+
+    // this will be used to identify the restaurant
+    sectionId String
+    section   Section @relation(fields: [sectionId], references: [id])
+
+    restaurantId String?
+    restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
+
+    // this will be used to add the order to the table
+    orders Order[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
+
+  // Section i.e like indoor, outdoor, balcony etc
+  model Section {
+    id String @id @default(cuid())
+
+    // this will be used to identify the section name
+    name String
+
+    // this will be used to identify the section capacity
+    capacity Int?
+
+    tables Table[] // this will be used to identify the tables in the section
+
+    // Relations
+    // this will be used to identify the restaurant
+    restaurantId String
+    restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
+
+  enum ViewType {
+    GRID
+    LIST
+  }
+
+  // Settings Model 
+  model MenuSettings {
+    id String @id @default(uuid())
+
+    // In the client side sometimes we hav to show the menu in particular order or view so using this we are displaying products 
+    view ViewType? @default(LIST)
+
+    // Sometimes the restaurant don't want to show their menu image so here we are creating value that decides to disply or not 
+    isShowImage Boolean? @default(true)
+
+    // same like above the to display price or not 
+    isHidePrice Boolean? @default(true)
+
+    // Always the charge will be in percentage so here we are creating the value that decides to display or not
+    surcharge Float? @default(0.0)
+
+    // enable and disable the surcharge for menu
+    surchargeStatus Boolean? @default(false)
+
+    // restaurant id 
+    restaurantId String     @unique
+    restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  }
+
+  // This will be used to identify the order status
+  enum OrderStatus {
+    CREATED
+    HOLD
+    COMPLETED
+    PAID
+    CANCELLED
+  }
+
+  enum KotPrintStatus {
+    PRINT
+    PRINTNOT
+  }
+
+  model Order {
+    id     String @id @default(uuid())
+    // Each order will have a unique order number
+    number String @unique
+
+    // this will be used to identify the order type i.e like dine in, take away, delivery etc
+    status OrderStatus
+
+    // this will be used to identify the order type i.e like dine in, take away, delivery etc
+    kotPrintStatus KotPrintStatus
+
+    // Total amount of the order
+    totalAmount Float?
+
+    // this will be used to identify the order amount after applying the discount and taxes
+    grandTotal Float?
+
+    // this will be used to store the applied discount amount 
+    totalDiscounts Float?
+
+    // this will be used to store the applied tax amount
+    totalTaxes Float?
+
+    // this will be used to store the applied charges amount
+    totalCharges Float?
+
+    // this will be used to determine the order is modified or not
+    isModified Boolean? @default(false)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    orderDetails OrderDetail[]
+
+    // Relations 
+    restaurantId String
+    restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+    // here we are storing the table id that is used to identify the table for the order
+    tableId String?
+    table   Table?  @relation(fields: [tableId], references: [id])
+
+    // applied taxes for the order 
+    appliedTaxes AppliedTax[]
+
+    // applied discounts for the order 
+    appliedDiscounts AppliedDiscount[]
+
+    // applied charges for the order
+    appliedCharges AppliedCharge[]
+  }
+
+  // For tracking selected addon items in OrderDetails
+  model OrderDetail {
+    id                        String   @id @default(uuid())
+    quantity                  Int
+    price                     Float // Base price of menu item
+    discount                  Float? // Discount amount for this item
+    hasSelectedVariant        Boolean? @default(false)
+    hasSelectedAddonGroupItem Boolean? @default(false)
+    notes                     String?
+
+    // Relations
+    orderId   String
+    order     Order        @relation(fields: [orderId], references: [id] ,  onDelete: Cascade)
+    
+    menuId    String
+    menu      Menu         @relation(fields: [menuId], references: [id] , onDelete: Cascade)
+
+    variantId String?
+    variant   MenuVariant? @relation(fields: [variantId], references: [id] , onDelete: Cascade)
+
+    // New relation to track selected addon items
+    selectedAddons SelectedAddon[]
+  }
+
+  // / New model to track selected addons for each order detail
+  model SelectedAddon {
+    id       String @id @default(uuid())
+    name     String
+    quantity Int    @default(1)
+    price    Float // Price at the time of order
+
+    // Relations
+    orderDetailId String
+    orderDetail   OrderDetail @relation(fields: [orderDetailId], references: [id], onDelete: Cascade)
+
+    addonGroupItemId String
+    addonGroupItem   AddonGroupItem @relation(fields: [addonGroupItemId], references: [id], onDelete: Cascade)
+  }
+
+  // / Model to store applied taxes at order time
+  model AppliedTax {
+    id     String @id @default(uuid())
+    name   String // Name of the tax
+    rate   Float // Tax rate applied
+    amount Float // Calculated tax amount
+
+    // Reference to original tax (optional, in case tax changes later)
+    taxId String?
+    tax   Tax?    @relation(fields: [taxId], references: [id])
+
+    // Relation to order
+    orderId String
+    order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  }
+
+  // Model to store applied discounts at order time
+  model AppliedDiscount {
+    id        String            @id @default(uuid())
+    name      String
+    value     Float // Discount value (percentage or amount)
+    valueType DiscountValueType
+    amount    Float // Calculated discount amount
+
+    // Reference to original discount (optional)
+    discountId String?
+    discount   Discount? @relation(fields: [discountId], references: [id])
+
+    // Relation to order
+    orderId String
+    order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  }
+
+  // Model to store applied charges at order time
+  model AppliedCharge {
+    id         String          @id @default(uuid())
+    name       String
+    chargeType ChargeValueType
+    value      Float // Charge value (percentage or amount)
+    amount     Float // Calculated charge amount
+
+    // Reference to original charge (optional)
+    chargeId String?
+    charge   Charge? @relation(fields: [chargeId], references: [id])
+
+    // Relation to order
+    orderId String
+    order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  }
+
+  // The discount value 
+  enum DiscountValueType {
+    PERCENTAGE
+    DOLLAR
+  }
+
+  // in future the discount can be applied to other things 
+  enum DiscountApplyTo {
+    MENU
+    ORDER
+    CATEGORY
+    CUSTOMER // * Future feature 
+  }
+
+  model Discount {
+    id String @id @default(uuid())
+
+    name String
+
+    value Float
+
+    // Discount value (percentage or dollar)
+    valueType DiscountValueType
+
+    // this will contain the info about the discount and rules about the discount i.e like if the discount is applied to the menu or order or category
+    applyRule Json?
+
+    applyTo DiscountApplyTo? // Could be enum if fixed options
+
+    // this dates will be used to identify the discount start and end date
+    startDate DateTime?
+    endDate   DateTime?
+
+    // this will be used to enable and disable the discount for restaurant
+    status Boolean? @default(true)
+
+    // this will be used to identify the restaurant
+    restaurantId String
+    restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+    // this will be used to track the applied discount for the order
+    appliedDiscounts AppliedDiscount[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
+
+  // / The discount value 
+  enum ChargeValueType {
+    PERCENTAGE
+    DOLLAR
+  }
+
+  // in future the discount can be applied to other things 
+  enum ChargeApplyTo {
+    MENU
+    ORDER
+    CATEGORY
+    CUSTOMER // * Future feature 
+  }
+
+  // Charges model that is used to store the restaurant extra charges info
+  model Charge {
+    id String @id @default(cuid())
+
+    // this will be used to identify the charge name
+    name String
+
+    chargeType ChargeValueType? // this will be used to identify the charge type i.e like service charge, delivery charge etc
+
+    // this will be used to identify the charge amount
+    chargeCost Float
+
+    // this will be used on which service they are the adding the charge i.e like dine in, take away, delivery etc
+    applyTo ChargeApplyTo?
+
+    // this will be used to enable and disable the charge for restaurant
+    status Boolean @default(true)
+
+    // this will be used to identify the restaurant
+    restaurantId String
+    restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+    // this will be used to track the applied charge for the order
+    appliedCharges AppliedCharge[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
+
+  // this is tax model 
+  model Tax {
+    id String @id @default(cuid())
+
+    // this will be used to identify the restaurant
+    restaurantId String
+    restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+    // this will be used to identify the tax type
+    name String
+
+    // this will be used to identify the tax rate
+    rate Float
+
+    // this will be used to enablie and disable the tax for restaurant
+    status Boolean @default(true)
+
+    // this willl be used to track the applied tax for the order
+    appliedTaxes AppliedTax[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
